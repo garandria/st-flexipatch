@@ -5,7 +5,7 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char *font = "Liberation Mono:pixelsize=12:antialias=true:autohint=true";
+static char *font = "Iosevka:style=Regular:size=13:antialias=true:autohint=true:dpi=96";
 #if FONT2_PATCH
 /* Spare fonts */
 static char *font2[] = {
@@ -164,32 +164,53 @@ float alphaUnfocused = 0.6;
 /* Terminal colors (16 first used in escape sequence) */
 static const char *colorname[] = {
 	/* 8 normal colors */
-	"black",
-	"red3",
-	"green3",
-	"yellow3",
-	"blue2",
-	"magenta3",
-	"cyan3",
-	"gray90",
+	/* "black", */
+	/* "red3", */
+	/* "green3", */
+	/* "yellow3", */
+	/* "blue2", */
+	/* "magenta3", */
+	/* "cyan3", */
+	/* "gray90", */
+
+    "#222D31",
+    "#850404",
+    "#3D893D",
+    "#9B9C11",
+    "#44849C",
+    "#925E86",
+    "#0A8B71",
+    "#d8d8d8",
 
 	/* 8 bright colors */
-	"gray50",
-	"red",
-	"green",
-	"yellow",
-	"#5c5cff",
-	"magenta",
-	"cyan",
-	"white",
+	/* "gray50", */
+	/* "red", */
+	/* "green", */
+	/* "yellow", */
+	/* "#5c5cff", */
+	/* "magenta", */
+	/* "cyan", */
+	/* "white", */
+
+    "#585858",
+    "#911D1D",
+    "#5AA55A",
+    "#f1c232",
+    "#5690A5",
+    "#9C6E92",
+    "#3AA28D",
+    "#f8f8f8",
 
 	[255] = 0,
 
 	/* more colors can be added after 255 to use with DefaultXX */
-	"#add8e6", /* 256 -> cursor */
+    "#1ABB9B", /* ↓ */
+	/* "#add8e6", /\* 256 -> cursor *\/ */
 	"#555555", /* 257 -> rev cursor*/
-	"#000000", /* 258 -> bg */
-	"#e5e5e5", /* 259 -> fg */
+    "#d3d3d3", /* ↓ */
+	/* "#222D31", /\* 258 -> bg *\/ */
+    "black", /* ↓ */
+	/* "#e5e5e5", /\* 259 -> fg *\/ */
 };
 
 
