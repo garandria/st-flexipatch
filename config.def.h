@@ -5,7 +5,7 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char *font = "Iosevka:style=Regular:size=13:antialias=true:autohint=true:dpi=96";
+static char *font = "Ralaimazoto Iosevka:style=Medium:size=12:antialias=true:autohint=true";
 #if FONT2_PATCH
 /* Spare fonts */
 static char *font2[] = {
@@ -66,7 +66,7 @@ static float chscale = 1.0;
 /*
  * word delimiter string
  *
- * More advanced example: L" `'\"()[]{}"
+ * More advanced example: L" `'\"()[]{}/"
  */
 wchar_t *worddelimiters = L" ";
 
@@ -195,7 +195,7 @@ static const char *colorname[] = {
     "#585858",
     "#911D1D",
     "#5AA55A",
-    "#f1c232",
+    "#C29C28", /* "#f1c232", */
     "#5690A5",
     "#9C6E92",
     "#3AA28D",
