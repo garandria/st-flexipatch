@@ -220,6 +220,9 @@ static void tsetattr(const int *, int);
 static void tsetchar(Rune, const Glyph *, int, int);
 static void tsetdirt(int, int);
 static void tsetscroll(int, int);
+#if SIXEL_PATCH
+static inline void tsetsixelattr(Line line, int x1, int x2);
+#endif // SIXEL_PATCH
 static void tswapscreen(void);
 static void tsetmode(int, int, const int *, int);
 static int twrite(const char *, int, int);
@@ -1149,6 +1152,15 @@ tsetdirtattr(int attr)
 	}
 }
 
+#if SIXEL_PATCH
+void
+tsetsixelattr(Line line, int x1, int x2)
+{
+	for (; x1 <= x2; x1++)
+		line[x1].mode |= ATTR_SIXEL;
+}
+#endif // SIXEL_PATCH
+
 void
 tfulldirt(void)
 {
@@ -1498,6 +1510,7 @@ csiparse(void)
 {
 	char *p = csiescseq.buf, *np;
 	long int v;
+	int sep = ';'; /* colon or semi-colon, but not both */
 
 	csiescseq.narg = 0;
 	if (*p == '?') {
@@ -1518,7 +1531,9 @@ csiparse(void)
 		#if UNDERCURL_PATCH
 		readcolonargs(&p, csiescseq.narg-1, csiescseq.carg);
 		#endif // UNDERCURL_PATCH
-		if (*p != ';' || csiescseq.narg == ESC_ARG_SIZ)
+		if (sep == ';' && *p == ':')
+			sep = ':'; /* allow override to colon once */
+		if (*p != sep || csiescseq.narg == ESC_ARG_SIZ)
 			break;
 		p++;
 	}
@@ -2589,7 +2604,7 @@ strhandle(void)
 	};
 	#if SIXEL_PATCH
 	ImageList *im, *newimages, *next, *tail;
-	int i, x, y, x1, y1, x2, y2, numimages;
+	int i, x1, y1, x2, y2, numimages;
 	int cx, cy;
 	Line line;
 	#if SCROLLBACK_PATCH || REFLOW_PATCH
@@ -2714,14 +2729,18 @@ strhandle(void)
 			y1 = newimages->y;
 			x2 = x1 + newimages->cols;
 			y2 = y1 + numimages;
-			for (tail = NULL, im = term.images; im; im = next) {
-				next = im->next;
-				if (im->x >= x1 && im->x + im->cols <= x2 &&
-					im->y >= y1 && im->y <= y2) {
-					delete_image(im);
-					continue;
+			if (newimages->transparent) {
+				for (tail = term.images; tail && tail->next; tail = tail->next);
+			} else {
+				for (tail = NULL, im = term.images; im; im = next) {
+					next = im->next;
+					if (im->x >= x1 && im->x + im->cols <= x2 &&
+					    im->y >= y1 && im->y <= y2) {
+						delete_image(im);
+						continue;
+					}
+					tail = im;
 				}
-				tail = im;
 			}
 			if (tail) {
 				tail->next = newimages;
@@ -2729,37 +2748,44 @@ strhandle(void)
 			} else {
 				term.images = newimages;
 			}
-			x2 = MIN(x2, term.col);
-			for (i = 0, im = newimages; im; im = next, i++) {
-				next = im->next;
-				#if SCROLLBACK_PATCH || REFLOW_PATCH
-				scr = IS_SET(MODE_ALTSCREEN) ? 0 : term.scr;
-				#endif // SCROLLBACK_PATCH
-				if (IS_SET(MODE_SIXEL_SDM)) {
+			#if COLUMNS_PATCH && !REFLOW_PATCH
+			x2 = MIN(x2, term.maxcol) - 1;
+			#else
+			x2 = MIN(x2, term.col) - 1;
+			#endif // COLUMNS_PATCH
+			if (IS_SET(MODE_SIXEL_SDM)) {
+				/* Sixel display mode: put the sixel in the upper left corner of
+				 * the screen, disable scrolling (the sixel will be truncated if
+				 * it is too long) and do not change the cursor position. */
+				for (i = 0, im = newimages; im; im = next, i++) {
+					next = im->next;
 					if (i >= term.row) {
 						delete_image(im);
 						continue;
 					}
 					im->y = i + scr;
-					line = term.line[i];
-				} else {
+					tsetsixelattr(term.line[i], x1, x2);
+					term.dirty[MIN(im->y, term.row-1)] = 1;
+				}
+			} else {
+				for (i = 0, im = newimages; im; im = next, i++) {
+					next = im->next;
+					#if SCROLLBACK_PATCH || REFLOW_PATCH
+					scr = IS_SET(MODE_ALTSCREEN) ? 0 : term.scr;
+					#endif // SCROLLBACK_PATCH
 					im->y = term.c.y + scr;
-					line = term.line[term.c.y];
+					tsetsixelattr(term.line[term.c.y], x1, x2);
+					term.dirty[MIN(im->y, term.row-1)] = 1;
+					if (i < numimages-1) {
+						im->next = NULL;
+						tnewline(0);
+						im->next = next;
+					}
 				}
-				for (x = im->x; x < x2; x++) {
-					line[x].u = ' ';
-					line[x].mode = ATTR_SIXEL;
-				}
-				term.dirty[MIN(im->y, term.row-1)] = 1;
-				if (!IS_SET(MODE_SIXEL_SDM) && i < numimages-1) {
-					im->next = NULL;
-					tnewline(0);
-					im->next = next;
-				}
+				/* if mode 8452 is set, sixel scrolling leaves cursor to right of graphic */
+				if (IS_SET(MODE_SIXEL_CUR_RT))
+					term.c.x = MIN(term.c.x + newimages->cols, term.col-1);
 			}
-			/* if mode 8452 is set, sixel scrolling leaves cursor to right of graphic */
-			if (!IS_SET(MODE_SIXEL_SDM) && IS_SET(MODE_SIXEL_CUR_RT))
-				term.c.x = MIN(term.c.x + newimages->cols, term.col-1);
 		}
 		#endif // SIXEL_PATCH
 		#if SYNC_PATCH
@@ -3097,7 +3123,7 @@ tcontrolcode(uchar ascii)
 void
 dcshandle(void)
 {
-	int bgcolor;
+	int bgcolor, transparent;
 	unsigned char r, g, b, a = 255;
 
 	switch (csiescseq.mode[0]) {
@@ -3119,6 +3145,7 @@ dcshandle(void)
 		break;
 	#endif // SYNC_PATCH
 	case 'q': /* DECSIXEL */
+		transparent = (csiescseq.narg >= 2 && csiescseq.arg[1] == 1);
 		if (IS_TRUECOL(term.c.attr.bg)) {
 			r = term.c.attr.bg >> 16 & 255;
 			g = term.c.attr.bg >> 8 & 255;
@@ -3129,7 +3156,7 @@ dcshandle(void)
 				a = dc.col[defaultbg].pixel >> 24 & 255;
 		}
 		bgcolor = a << 24 | r << 16 | g << 8 | b;
-		if (sixel_parser_init(&sixel_st, (255 << 24), bgcolor, 1, win.cw, win.ch) != 0)
+		if (sixel_parser_init(&sixel_st, transparent, (255 << 24), bgcolor, 1, win.cw, win.ch) != 0)
 			perror("sixel_parser_init() failed");
 		term.mode |= MODE_SIXEL;
 		break;
@@ -3498,7 +3525,7 @@ tresize(int col, int row)
 	#endif // COLUMNS_PATCH
 	int *bp;
 	#if SIXEL_PATCH
-	int x, x2;
+	int x2;
 	Line line;
 	ImageList *im, *next;
 	#endif // SIXEL_PATCH
@@ -3605,8 +3632,7 @@ tresize(int col, int row)
 	}
 
 	#if SIXEL_PATCH
-	/* expand images into new text cells to prevent them from being deleted in
-	 * xfinishdraw() that draws the images */
+	/* expand images into new text cells */
 	for (i = 0; i < 2; i++) {
 		for (im = term.images; im; im = next) {
 			next = im->next;
@@ -3631,11 +3657,9 @@ tresize(int col, int row)
 			}
 			line = term.line[im->y];
 			#endif // SCROLLBACK_PATCH
-			x2 = MIN(im->x + im->cols, term.col);
-			for (x = im->x; x < x2; x++) {
-				line[x].u = ' ';
-				line[x].mode = ATTR_SIXEL;
-			}
+			x2 = MIN(im->x + im->cols, col) - 1;
+			if (mincol < col && x2 >= mincol && im->x < col)
+				tsetsixelattr(line, MAX(im->x, mincol), x2);
 		}
 		tswapscreen();
 	}

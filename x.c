@@ -42,6 +42,13 @@ enum undercurl_slope_type {
 };
 #endif // UNDERCURL_PATCH
 
+#if ANYGEOMETRY_PATCH
+typedef enum {
+	PixelGeometry,
+	CellGeometry
+} Geometry;
+#endif // ANYGEOMETRY_PATCH
+
 /* X modifiers */
 #define XK_ANY_MOD    UINT_MAX
 #define XK_NO_MOD     0
@@ -311,6 +318,7 @@ void
 zoomabs(const Arg *arg)
 {
 	#if SIXEL_PATCH
+	int i;
 	ImageList *im;
 	#endif // SIXEL_PATCH
 
@@ -321,11 +329,16 @@ zoomabs(const Arg *arg)
 	#endif // FONT2_PATCH
 
 	#if SIXEL_PATCH
-	/* deleting old pixmaps forces the new scaled pixmaps to be created */
-	for (im = term.images; im; im = im->next) {
-		if (im->pixmap)
-			XFreePixmap(xw.dpy, (Drawable)im->pixmap);
-		im->pixmap = NULL;
+	/* delete old pixmaps so that xfinishdraw() can create new scaled ones */
+	for (im = term.images, i = 0; i < 2; i++, im = term.images_alt) {
+		for (; im; im = im->next) {
+			if (im->pixmap)
+				XFreePixmap(xw.dpy, (Drawable)im->pixmap);
+			if (im->clipmask)
+				XFreePixmap(xw.dpy, (Drawable)im->clipmask);
+			im->pixmap = NULL;
+			im->clipmask = NULL;
+		}
 	}
 	#endif // SIXEL_PATCH
 
@@ -1413,7 +1426,7 @@ xinit(int cols, int rows)
 	#elif !SWAPMOUSE_PATCH
 	Cursor cursor;
 	#endif // HIDECURSOR_PATCH
-	Window parent;
+	Window parent, root;
 	pid_t thispid = getpid();
 	#if !SWAPMOUSE_PATCH
 	XColor xmousefg, xmousebg;
@@ -1465,13 +1478,31 @@ xinit(int cols, int rows)
 	xloadcols();
 
 	/* adjust fixed window geometry */
-	#if ANYSIZE_PATCH
+	#if ANYGEOMETRY_PATCH
+	switch (geometry) {
+	case CellGeometry:
+		#if ANYSIZE_PATCH
+		win.w = 2 * win.hborderpx + cols * win.cw;
+		win.h = 2 * win.vborderpx + rows * win.ch;
+		#else
+		win.w = 2 * borderpx + cols * win.cw;
+		win.h = 2 * borderpx + rows * win.ch;
+		#endif // ANYGEOMETRY_PATCH | ANYSIZE_PATCH
+		break;
+	case PixelGeometry:
+		win.w = cols;
+		win.h = rows;
+		cols = (win.w - 2 * borderpx) / win.cw;
+		rows = (win.h - 2 * borderpx) / win.ch;
+		break;
+	}
+	#elif ANYSIZE_PATCH
 	win.w = 2 * win.hborderpx + cols * win.cw;
 	win.h = 2 * win.vborderpx + rows * win.ch;
 	#else
 	win.w = 2 * borderpx + cols * win.cw;
 	win.h = 2 * borderpx + rows * win.ch;
-	#endif // ANYSIZE_PATCH
+	#endif // ANYGEOMETRY_PATCH | ANYSIZE_PATCH
 	if (xw.gm & XNegative)
 		xw.l += DisplayWidth(xw.dpy, xw.scr) - win.w - 2;
 	if (xw.gm & YNegative)
@@ -1493,11 +1524,12 @@ xinit(int cols, int rows)
 	xw.attrs.event_mask |= PointerMotionMask;
 	#endif // OPENURLONCLICK_PATCH
 
+	root = XRootWindow(xw.dpy, xw.scr);
 	#if !ALPHA_PATCH
 	if (!(opt_embed && (parent = strtol(opt_embed, NULL, 0))))
-		parent = XRootWindow(xw.dpy, xw.scr);
+		parent = root;
 	#endif // ALPHA_PATCH
-	xw.win = XCreateWindow(xw.dpy, parent, xw.l, xw.t,
+	xw.win = XCreateWindow(xw.dpy, root, xw.l, xw.t,
 			#if ALPHA_PATCH
 			win.w, win.h, 0, xw.depth, InputOutput,
 			#else
@@ -1505,6 +1537,8 @@ xinit(int cols, int rows)
 			#endif // ALPHA_PATCH
 			xw.vis, CWBackPixel | CWBorderPixel | CWBitGravity
 			| CWEventMask | CWColormap, &xw.attrs);
+	if (parent != root)
+		XReparentWindow(xw.dpy, xw.win, parent, xw.l, xw.t);
 
 	memset(&gcvalues, 0, sizeof(gcvalues));
 	gcvalues.graphics_exposures = False;
@@ -1517,7 +1551,7 @@ xinit(int cols, int rows)
 	#endif // SINGLE_DRAWABLE_BUFFER_PATCH
 	dc.gc = XCreateGC(xw.dpy, xw.buf, GCGraphicsExposures, &gcvalues);
 	#else
-	dc.gc = XCreateGC(xw.dpy, parent, GCGraphicsExposures,
+	dc.gc = XCreateGC(xw.dpy, xw.win, GCGraphicsExposures,
 			&gcvalues);
 	#if SINGLE_DRAWABLE_BUFFER_PATCH
 	xw.buf = xw.win;
@@ -2860,6 +2894,9 @@ xseticontitle(char *p)
 	XTextProperty prop;
 	DEFAULT(p, opt_title);
 
+	if (p[0] == '\0')
+		p = opt_title;
+
 	if (Xutf8TextListToTextProperty(xw.dpy, &p, 1, XUTF8StringStyle,
 			&prop) != Success)
 		return;
@@ -2879,7 +2916,7 @@ xsettitle(char *p, int pop)
 		titlestack[tstki] = NULL;
 		tstki = (tstki - 1 + TITLESTACKSIZE) % TITLESTACKSIZE;
 		p = titlestack[tstki] ? titlestack[tstki] : opt_title;
-	} else if (p) {
+	} else if (p && p[0] != '\0') {
 		titlestack[tstki] = xstrdup(p);
 	} else {
 		titlestack[tstki] = NULL;
@@ -2918,6 +2955,9 @@ xsettitle(char *p)
 {
 	XTextProperty prop;
 	DEFAULT(p, opt_title);
+
+	if (p[0] == '\0')
+		p = opt_title;
 
 	if (Xutf8TextListToTextProperty(xw.dpy, &p, 1, XUTF8StringStyle,
 			&prop) != Success)
@@ -3130,9 +3170,14 @@ xfinishdraw(void)
 	ImageList *im, *next;
 	Imlib_Image origin, scaled;
 	XGCValues gcvalues;
-	GC gc;
+	GC gc = NULL;
 	int width, height;
-	int x, x2, del;
+	int del, desty, mode, x1, x2, xend;
+	#if ANYSIZE_PATCH
+	int bw = win.hborderpx, bh = win.vborderpx;
+	#else
+	int bw = borderpx, bh = borderpx;
+	#endif // ANYSIZE_PATCH
 	Line line;
 	#endif // SIXEL_PATCH
 
@@ -3144,9 +3189,15 @@ xfinishdraw(void)
 		if (im->x >= term.col || im->y >= term.row || im->y < 0)
 			continue;
 
+		#if KEYBOARDSELECT_PATCH && REFLOW_PATCH
+		/* do not draw the image on the search bar */
+		if (im->y == term.row-1 && IS_SET(MODE_KBDSELECT) && kbds_issearchmode())
+			continue;
+		#endif // KEYBOARDSELECT_PATCH
+
 		/* scale the image */
-		width = im->width * win.cw / im->cw;
-		height = im->height * win.ch / im->ch;
+		width = MAX(im->width * win.cw / im->cw, 1);
+		height = MAX(im->height * win.ch / im->ch, 1);
 		if (!im->pixmap) {
 			im->pixmap = (void *)XCreatePixmap(xw.dpy, xw.win, width, height,
 				#if ALPHA_PATCH
@@ -3155,6 +3206,8 @@ xfinishdraw(void)
 				DefaultDepth(xw.dpy, xw.scr)
 				#endif // ALPHA_PATCH
 			);
+			if (!im->pixmap)
+				continue;
 			if (win.cw == im->cw && win.ch == im->ch) {
 				XImage ximage = {
 					.format = ZPixmap,
@@ -3175,12 +3228,15 @@ xfinishdraw(void)
 					#endif // ALPHA_PATCH
 				};
 				XPutImage(xw.dpy, (Drawable)im->pixmap, dc.gc, &ximage, 0, 0, 0, 0, width, height);
+				if (im->transparent)
+					im->clipmask = (void *)sixel_create_clipmask((char *)im->pixels, width, height);
 			} else {
 				origin = imlib_create_image_using_data(im->width, im->height, (DATA32 *)im->pixels);
 				if (!origin)
 					continue;
 				imlib_context_set_image(origin);
 				imlib_image_set_has_alpha(1);
+				imlib_context_set_anti_alias(im->transparent ? 0 : 1); /* anti-aliasing messes up the clip mask */
 				scaled = imlib_create_cropped_scaled_image(0, 0, im->width, im->height, width, height);
 				imlib_free_image_and_decache();
 				if (!scaled)
@@ -3206,42 +3262,56 @@ xfinishdraw(void)
 					#endif // ALPHA_PATCH
 				};
 				XPutImage(xw.dpy, (Drawable)im->pixmap, dc.gc, &ximage, 0, 0, 0, 0, width, height);
+				if (im->transparent)
+					im->clipmask = (void *)sixel_create_clipmask((char *)imlib_image_get_data_for_reading_only(), width, height);
 				imlib_free_image_and_decache();
 			}
 		}
 
-		/* clip the image so it does not go over to borders */
-		x2 = MIN(im->x + im->cols, term.col);
-		width = MIN(width, (x2 - im->x) * win.cw);
+		/* create GC */
+		if (!gc) {
+			memset(&gcvalues, 0, sizeof(gcvalues));
+			gcvalues.graphics_exposures = False;
+			gc = XCreateGC(xw.dpy, xw.win, GCGraphicsExposures, &gcvalues);
+		}
 
-		/* delete the image if the text cells behind it have been changed */
+		/* set the clip mask */
+		desty = bh + im->y * win.ch;
+		if (im->clipmask) {
+			XSetClipMask(xw.dpy, gc, (Drawable)im->clipmask);
+			XSetClipOrigin(xw.dpy, gc, bw + im->x * win.cw, desty);
+		}
+
+		/* draw only the parts of the image that are not erased */
 		#if SCROLLBACK_PATCH || REFLOW_PATCH
-		line = TLINE(im->y);
+		line = TLINE(im->y) + im->x;
 		#else
-		line = term.line[im->y];
-		#endif // SCROLLBACK_PATCH | REFLOW_PATCH
-		for (del = 0, x = im->x; x < x2; x++) {
-			if ((del = !(line[x].mode & ATTR_SIXEL)))
-				break;
+		line = term.line[im->y] + im->x;
+		#endif // SCROLLBACK_PATCH || REFLOW_PATCH
+		xend = MIN(im->x + im->cols, term.col);
+		for (del = 1, x1 = im->x; x1 < xend; x1 = x2) {
+			mode = line->mode & ATTR_SIXEL;
+			for (x2 = x1 + 1; x2 < xend; x2++) {
+				if (((++line)->mode & ATTR_SIXEL) != mode)
+					break;
+			}
+			if (mode) {
+				XCopyArea(xw.dpy, (Drawable)im->pixmap, xw.buf, gc,
+				    (x1 - im->x) * win.cw, 0,
+				    MIN((x2 - x1) * win.cw, width - (x1 - im->x) * win.cw), height,
+				    bw + x1 * win.cw, desty);
+				del = 0;
+			}
 		}
-		if (del) {
-			delete_image(im);
-			continue;
-		}
+		if (im->clipmask)
+			XSetClipMask(xw.dpy, gc, None);
 
-		/* draw the image */
-		memset(&gcvalues, 0, sizeof(gcvalues));
-		gcvalues.graphics_exposures = False;
-		gc = XCreateGC(xw.dpy, xw.win, GCGraphicsExposures, &gcvalues);
-		#if ANYSIZE_PATCH
-		XCopyArea(xw.dpy, (Drawable)im->pixmap, xw.buf, gc, 0, 0,
-			width, height, win.hborderpx + im->x * win.cw, win.vborderpx + im->y * win.ch);
-		#else
-		XCopyArea(xw.dpy, (Drawable)im->pixmap, xw.buf, gc, 0, 0,
-			width, height, borderpx + im->x * win.cw, borderpx + im->y * win.ch);
-		#endif // ANYSIZE_PATCH
-		XFreeGC(xw.dpy, gc);
+		/* if all the parts are erased, we can delete the entire image */
+		if (del && im->x + im->cols <= term.col)
+			delete_image(im);
 	}
+	if (gc)
+		XFreeGC(xw.dpy, gc);
 	#endif // SIXEL_PATCH
 
 	#if !SINGLE_DRAWABLE_BUFFER_PATCH
@@ -3842,7 +3912,17 @@ main(int argc, char *argv[])
 	case 'g':
 		xw.gm = XParseGeometry(EARGF(usage()),
 				&xw.l, &xw.t, &cols, &rows);
+		#if ANYGEOMETRY_PATCH
+		geometry = CellGeometry;
+		#endif // ANYGEOMETRY_PATCH
 		break;
+	#if ANYGEOMETRY_PATCH
+	case 'G':
+		xw.gm = XParseGeometry(EARGF(usage()),
+		        &xw.l, &xw.t, &width, &height);
+		geometry = PixelGeometry;
+		break;
+	#endif // ANYGEOMETRY_PATCH
 	case 'i':
 		xw.isfixed = 1;
 		break;
@@ -3891,13 +3971,28 @@ run:
 	hbcreatebuffer();
 	#endif // LIGATURES_PATCH
 
+	#if ANYGEOMETRY_PATCH
+	switch (geometry) {
+	case CellGeometry:
+		xinit(cols, rows);
+		break;
+	case PixelGeometry:
+		xinit(width, height);
+		cols = (win.w - 2 * borderpx) / win.cw;
+		rows = (win.h - 2 * borderpx) / win.ch;
+		break;
+	}
+	#endif // ANYGEOMETRY_PATCH
+
 	cols = MAX(cols, 1);
 	rows = MAX(rows, 1);
 	#if ALPHA_PATCH && ALPHA_FOCUS_HIGHLIGHT_PATCH
 	defaultbg = MAX(LEN(colorname), 256);
 	#endif // ALPHA_FOCUS_HIGHLIGHT_PATCH
 	tnew(cols, rows);
+	#if !ANYGEOMETRY_PATCH
 	xinit(cols, rows);
+	#endif // ANYGEOMETRY_PATCH
 	#if BACKGROUND_IMAGE_PATCH
 	bginit();
 	#endif // BACKGROUND_IMAGE_PATCH
