@@ -116,7 +116,7 @@ static unsigned int blinktimeout = 800;
 /*
  * thickness of underline and bar cursors
  */
-static unsigned int cursorthickness = 2;
+static unsigned int cursorthickness = 3;
 
 #if HIDECURSOR_PATCH
 /* Hide the X cursor whenever a key is pressed. 0: off, 1: on */
