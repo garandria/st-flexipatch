@@ -5,7 +5,7 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char *font = "Pragmata Pro Mono Liga:style=medium:size=12";
+static char *font = "Pragmata Pro Mono Liga:style=medium:size=16";
 #if FONT2_PATCH
 /* Spare fonts */
 static char *font2[] = {
