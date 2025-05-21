@@ -175,6 +175,15 @@ float alphaUnfocused = 0.6;
 #endif // ALPHA_FOCUS_HIGHLIGHT_PATCH
 #endif // ALPHA_PATCH
 
+#if DRAG_AND_DROP_PATCH
+/*
+ * drag and drop escape characters
+ *
+ * this will add a '\' before any characters specified in the string.
+ */
+char *xdndescchar = " !\"#$&'()*;<>?[\\]^`{|}~";
+#endif // DRAG_AND_DROP_PATCH
+
 /* Terminal colors (16 first used in escape sequence) */
 static const char *colorname[] = {
   /* 8 normal colors */
@@ -365,6 +374,9 @@ static uint forcemousemod = ShiftMask;
  */
 static MouseShortcut mshortcuts[] = {
 	/* mask                 button   function        argument       release  screen */
+	#if OPEN_SELECTED_TEXT_PATCH
+	{ ControlMask,          Button2, selopen,        {.i = 0},      1 },
+	#endif // OPEN_SELECTED_TEXT_PATCH
 	#if CLIPBOARD_PATCH
 	{ XK_ANY_MOD,           Button2, clippaste,      {.i = 0},      1 },
 	#else
