@@ -2039,6 +2039,15 @@ tsetmode(int priv, int set, const int *args, int narg)
 				MODBIT(term.mode, set, MODE_SIXEL_CUR_RT);
 				break;
 			#endif // SIXEL_PATCH
+			#if SYNC_PATCH
+			case 2026:
+				if (set) {
+					tsync_begin();
+				} else {
+					tsync_end();
+				}
+				break;
+			#endif // SYNC_PATCH
 			default:
 				fprintf(stderr,
 					"erresc: unknown private set/reset mode %d\n",
@@ -2435,6 +2444,23 @@ csihandle(void)
 			goto unknown;
 		}
 		break;
+	#if SYNC_PATCH
+	case '$': /* DECRQM -- DEC Request Mode (private) */
+		if (csiescseq.mode[1] == 'p' && csiescseq.priv) {
+			switch (csiescseq.arg[0]) {
+			#if SYNC_PATCH
+			case 2026:
+				/* https://gist.github.com/christianparpart/d8a62cc1ab659194337d73e399004036 */
+				ttywrite(su ? "\033[?2026;1$y" : "\033[?2026;2$y", 11, 0);
+				break;
+			#endif // SYNC_PATCH
+			default:
+				goto unknown;
+			}
+			break;
+		}
+		goto unknown;
+	#endif // SYNC_PATCH
 	case 'r': /* DECSTBM -- Set Scrolling Region */
 		if (csiescseq.priv) {
 			goto unknown;
@@ -2498,7 +2524,11 @@ csihandle(void)
 		break;
 	#endif // CSI_22_23_PATCH | SIXEL_PATCH
 	case 'u': /* DECRC -- Restore cursor position (ANSI.SYS) */
-		tcursor(CURSOR_LOAD);
+		if (csiescseq.priv) {
+			goto unknown;
+		} else {
+			tcursor(CURSOR_LOAD);
+		}
 		break;
 	case ' ':
 		switch (csiescseq.mode[1]) {
