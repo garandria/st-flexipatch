@@ -515,7 +515,15 @@ static Shortcut shortcuts[] = {
  * If you want keys other than the X11 function keys (0xFD00 - 0xFFFF)
  * to be mapped below, add them to this array.
  */
-static KeySym mappedkeys[] = { -1 };
+/* static KeySym mappedkeys[] = { -1 }; */
+
+/* Inspiration from:
+ * https://st.suckless.org/patches/fix_keyboard_input/st-fix-keyboard-input-20180605-dc3b5ba.diff
+ */
+static KeySym mappedkeys[] = {
+  XK_less,
+  XK_greater,
+};
 #endif // FIXKEYBOARDINPUT_PATCH
 
 /*
@@ -567,7 +575,11 @@ static Key key[] = {
 	{ XK_KP_Delete,     ControlMask,    "\033[3;5~",    +1,    0},
 	{ XK_KP_Delete,     ShiftMask,      "\033[2K",      -1,    0},
 	{ XK_KP_Delete,     ShiftMask,      "\033[3;2~",    +1,    0},
-	#if DELKEY_PATCH
+	{ XK_less,         ControlMask,                    "\033[60;5u",  +1,  0},
+	{ XK_less,         ControlMask|ShiftMask,          "\033[60;6u",  +1,  0},
+	{ XK_greater,      ControlMask,                    "\033[62;5u",  +1,  0},
+	{ XK_greater,      ControlMask|ShiftMask,          "\033[62;6u",  +1,  0},
+#if DELKEY_PATCH
 	{ XK_KP_Delete,     XK_ANY_MOD,     "\033[3~",      -1,    0},
 	#else
 	{ XK_KP_Delete,     XK_ANY_MOD,     "\033[P",       -1,    0},
