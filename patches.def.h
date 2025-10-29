@@ -219,7 +219,7 @@
  * cursor).
  * https://www.reddit.com/r/suckless/comments/nvee8h/how_to_hide_cursor_in_st_is_there_a_patch_for_it/
  */
-#define HIDE_TERMINAL_CURSOR_PATCH 0
+#define HIDE_TERMINAL_CURSOR_PATCH 1
 
 /* This patch adds a keybinding that lets you invert the current colorscheme of st.
  * This provides a simple way to temporarily switch to a light colorscheme if you use a dark
@@ -342,7 +342,7 @@
  * Text wraps when the terminal window is made smaller.
  * Comes with scrollback.
  */
-#define REFLOW_PATCH 0
+#define REFLOW_PATCH 1
 
 /* This patch allows you to specify a border that is relative in size to the width of a cell
  * in the terminal.
@@ -359,7 +359,7 @@
 /* Scroll back through terminal output using Shift+{PageUp, PageDown}.
  * https://st.suckless.org/patches/scrollback/
  */
-#define SCROLLBACK_PATCH 1
+#define SCROLLBACK_PATCH 0
 
 /* Scroll back through terminal output using Shift+MouseWheel.
  * This variant depends on SCROLLBACK_PATCH being enabled.
@@ -390,7 +390,7 @@
  * in w3m to display. While this patch does not break the alpha patch it images
  * are not shown in w3m if the alpha patch is applied.
  */
-#define SINGLE_DRAWABLE_BUFFER_PATCH 0
+#define SINGLE_DRAWABLE_BUFFER_PATCH 1
 
 /* This patch adds SIXEL graphics support for st.
  * Note that patch/sixel.c/sixel_hls.c come from mintty, licensed under GPL.
@@ -440,7 +440,7 @@
  *
  * https://st.suckless.org/patches/sync/
  */
-#define SYNC_PATCH 0
+#define SYNC_PATCH 01
 
 /* Instead of a default X cursor, use the xterm cursor from your cursor theme.
  * You need to uncomment the corresponding line in config.mk to use the -lXcursor library
@@ -471,7 +471,7 @@
  * scroll program.
  * https://st.suckless.org/patches/universcroll/
  */
-#define UNIVERSCROLL_PATCH 0
+#define UNIVERSCROLL_PATCH 1
 
 /* Use XftFontMatch in place of FcFontMatch.
  *
